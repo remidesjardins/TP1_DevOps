@@ -2,26 +2,33 @@ name: CI DevOps
 
 on:
   push:
-    branches: [ "main", "newcarservice" ]
+    branches: [ "main", "newcarservice", "feature/**" ]
   pull_request:
     branches: [ "main" ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      DOCKER_BUILDKIT: 1
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
+      # Build until the Maven stage, copy JaCoCo HTML report for coverage visualization in CI artifacts
+      - name: Extract JaCoCo report from Docker build stage
+        run: |
+          docker build --target build -t tp1-devops:build-ci .
+          cid=$(docker create tp1-devops:build-ci)
+          docker cp "$cid:/app/target/site/jacoco" ./jacoco-report
+          docker rm "$cid"
+
+      - name: Upload JaCoCo coverage report
+        uses: actions/upload-artifact@v4
         with:
-          java-version: '17'
-          distribution: 'temurin'
+          name: jacoco-report
+          path: jacoco-report
 
-      - name: Build with Maven
-        run: mvn clean package
-
-      - name: Build Docker image
-        run: docker build -t hello .
+      - name: Build Docker image (runtime)
+        run: docker build -t tp1-devops:ci .
