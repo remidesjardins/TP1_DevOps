@@ -6,29 +6,39 @@ on:
   pull_request:
     branches: [ "main" ]
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    env:
-      DOCKER_BUILDKIT: 1
+env:
+  DOCKER_BUILDKIT: 1
 
+jobs:
+  # Bloc 1 — compile, tests (mvn verify dans Docker), rapport JaCoCo
+  tests-and-coverage:
+    name: Tests & couverture (JaCoCo)
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Build until the Maven stage, copy JaCoCo HTML report for coverage visualization in CI artifacts
-      - name: Extract JaCoCo report from Docker build stage
+      - name: Build image (étape Maven) et extraire le rapport JaCoCo
         run: |
           docker build --target build -t tp1-devops:build-ci .
           cid=$(docker create tp1-devops:build-ci)
           docker cp "$cid:/app/target/site/jacoco" ./jacoco-report
           docker rm "$cid"
 
-      - name: Upload JaCoCo coverage report
+      - name: Publier le rapport JaCoCo (artifact)
         uses: actions/upload-artifact@v4
         with:
           name: jacoco-report
           path: jacoco-report
 
-      - name: Build Docker image (runtime)
+  # Bloc 2 — image runtime (après succès des tests)
+  docker-image:
+    name: Image Docker (runtime)
+    runs-on: ubuntu-latest
+    needs: tests-and-coverage
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Construire l’image finale
         run: docker build -t tp1-devops:ci .
