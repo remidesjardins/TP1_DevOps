@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>Calculator</title>
+    <style>
+        :root {
+            font-family: system-ui, sans-serif;
+            color: #0f172a;
+            background: #f8fafc;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .card {
+            background: #fff;
+            border-radius: 12px;
+            padding: 1.75rem 2rem;
+            box-shadow: 0 10px 40px rgba(15, 23, 42, 0.08);
+            width: min(420px, 92vw);
+        }
+
+        h1 {
+            margin: 0 0 1rem;
+            font-size: 1.35rem;
+        }
+
+        label {
+            display: block;
+            font-size: 0.85rem;
+            margin-bottom: 0.35rem;
+            color: #475569;
+        }
+
+        input {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 0.55rem 0.65rem;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            margin-bottom: 0.9rem;
+            font-size: 1rem;
+        }
+
+        .ops {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 0.5rem;
+            margin: 0.5rem 0 1rem;
+        }
+
+        button {
+            padding: 0.65rem;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            background: #2563eb;
+            color: #fff;
+        }
+
+        button:hover {
+            background: #1d4ed8;
+        }
+
+        button:active {
+            transform: translateY(1px);
+        }
+
+        .out {
+            min-height: 3rem;
+            padding: 0.75rem;
+            border-radius: 8px;
+            background: #f1f5f9;
+            font-family: ui-monospace, monospace;
+            font-size: 0.95rem;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .err {
+            color: #b91c1c;
+            background: #fef2f2;
+        }
+    </style>
+</head>
+<body>
+<main class="card">
+    <h1>Calculator</h1>
+    <label for="a">A</label>
+    <input id="a" type="number" step="any" value="1"/>
+
+    <label for="b">B</label>
+    <input id="b" type="number" step="any" value="2"/>
+
+    <div class="ops">
+        <button type="button" data-op="add" aria-label="Add">+</button>
+        <button type="button" data-op="sub" aria-label="Subtract">−</button>
+        <button type="button" data-op="mul" aria-label="Multiply">×</button>
+        <button type="button" data-op="div" aria-label="Divide">÷</button>
+    </div>
+
+    <div id="result" class="out" role="status">Result will appear here.</div>
+</main>
+<script>
+    const aEl = document.getElementById('a');
+    const bEl = document.getElementById('b');
+    const out = document.getElementById('result');
+
+    function parseNum(el) {
+        const v = parseFloat(el.value);
+        return Number.isFinite(v) ? v : NaN;
+    }
+
+    async function run(op) {
+        const a = parseNum(aEl);
+        const b = parseNum(bEl);
+        if (Number.isNaN(a) || Number.isNaN(b)) {
+            out.classList.add('err');
+            out.textContent = 'Please enter valid numbers for A and B.';
+            return;
+        }
+        out.classList.remove('err');
+        out.textContent = 'Loading…';
+        try {
+            const url = new URL(`/api/calc/${op}`, window.location.origin);
+            url.searchParams.set('a', String(a));
+            url.searchParams.set('b', String(b));
+            const res = await fetch(url.toString(), {headers: {Accept: 'application/json'}});
+            const text = await res.text();
+            if (!res.ok) {
+                let msg = text;
+                try {
+                    const j = JSON.parse(text);
+                    msg = j.message || text;
+                } catch {
+                    /* keep raw */
+                }
+                out.classList.add('err');
+                out.textContent = `Error (${res.status}): ${msg}`;
+                return;
+            }
+            const data = JSON.parse(text);
+            out.classList.remove('err');
+            out.textContent = JSON.stringify(data, null, 2);
+        } catch (e) {
+            out.classList.add('err');
+            out.textContent = 'Network error. Is the API running?';
+        }
+    }
+
+    document.querySelectorAll('button[data-op]').forEach((btn) => {
+        btn.addEventListener('click', () => run(btn.getAttribute('data-op')));
+    });
+</script>
+</body>
+</html>
