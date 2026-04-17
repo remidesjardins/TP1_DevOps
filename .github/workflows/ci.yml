@@ -140,9 +140,11 @@ jobs:
           -Dsonar.organization=${{ vars.SONAR_ORGANIZATION }}
           -Dsonar.projectKey=${{ vars.SONAR_PROJECT_KEY }}
 
+      # slug explicite : évite une URL ingest mal formée (ex. owner::::repo) avec certains dépôts / OIDC.
       - name: Envoyer la couverture à Codecov (OIDC)
         uses: codecov/codecov-action@v5
         with:
+          slug: ${{ github.repository }}
           files: target/site/jacoco/jacoco.xml
           fail_ci_if_error: true
           use_oidc: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
