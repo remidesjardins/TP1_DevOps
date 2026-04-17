@@ -1,8 +1,13 @@
 # syntax=docker/dockerfile:1
+#
+# Multi-stage aligné avec la CI GitHub Actions :
+#   - stage "build"  : compile + tests (verify) OU package seul si SKIP_TESTS=true (image finale en CI)
+#   - stage runtime  : JRE + JAR
 
-# Stage 1: tests + package entirely inside the image (reproducible, no host target/)
 FROM eclipse-temurin:17-jdk AS build
 WORKDIR /app
+
+ARG SKIP_TESTS=false
 
 COPY .mvn/ .mvn
 COPY mvnw pom.xml ./
@@ -10,14 +15,18 @@ RUN chmod +x mvnw
 
 COPY src ./src
 
-# Cache Maven repository between builds (requires BuildKit: export DOCKER_BUILDKIT=1)
+# Cache Maven ; en CI l’image finale passe SKIP_TESTS=true (tests déjà exécutés sur l’étape build Docker).
 RUN --mount=type=cache,target=/root/.m2 \
-    ./mvnw -B clean verify \
-    && FAT_JAR="$(find target -maxdepth 1 -name '*.jar' ! -name '*.jar.original' | head -n1)" \
-    && test -n "$FAT_JAR" \
-    && cp "$FAT_JAR" /app/application.jar
+    set -eux; \
+    if [ "${SKIP_TESTS}" = "true" ]; then \
+      ./mvnw -B clean package -DskipTests; \
+    else \
+      ./mvnw -B clean verify; \
+    fi; \
+    FAT_JAR="$(find target -maxdepth 1 -name '*.jar' ! -name '*.jar.original' | head -n1)"; \
+    test -n "${FAT_JAR}"; \
+    cp "${FAT_JAR}" /app/application.jar
 
-# Stage 2: minimal JRE runtime
 FROM eclipse-temurin:17-jre-jammy
 WORKDIR /app
 
