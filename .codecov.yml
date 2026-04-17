@@ -1,0 +1,19 @@
+# https://docs.codecov.com/docs/codecov-yaml
+codecov:
+  require_ci_pass: true
+
+coverage:
+  range: 60..90
+  precision: 2
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 1%
+    patch:
+      default:
+        informational: true
+
+comment:
+  layout: "reach,diff,flags,files,footer"
+  behavior: default
