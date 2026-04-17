@@ -8,7 +8,11 @@
 # Dockerfile : stage `build` = tests ; image finale = ARG SKIP_TESTS=true en CI.
 #
 # GitHub : Secrets SONAR_TOKEN | Variables SONAR_ORGANIZATION, SONAR_PROJECT_KEY
-# Codecov : dépôt activé sur codecov.io ; OIDC (sauf PR fork).
+# Codecov : secret CODECOV_TOKEN (app.codecov.io → dépôt → Settings → upload token).
+#           L’upload OIDC peut produire une URL slug invalide (owner::::repo) et des 500 ; le token est plus fiable.
+#
+# Analyse Sonar/Codecov « tout le dépôt » sur main : voir .github/workflows/analyse-main.yml (ce workflow
+# n’exécute pas CI-3 sur un push vers main pour éviter un double envoi Sonar).
 
 name: CI DevOps
 
@@ -88,11 +92,10 @@ jobs:
   stage-quality:
     name: "CI-3 · Qualité (SonarCloud + Codecov)"
     needs: stage-docker-build
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    if: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && !(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write
       pull-requests: write
     steps:
       - name: Checkout code
@@ -140,14 +143,22 @@ jobs:
           -Dsonar.organization=${{ vars.SONAR_ORGANIZATION }}
           -Dsonar.projectKey=${{ vars.SONAR_PROJECT_KEY }}
 
-      # slug explicite : évite une URL ingest mal formée (ex. owner::::repo) avec certains dépôts / OIDC.
-      - name: Envoyer la couverture à Codecov (OIDC)
+      - name: Vérifier le secret Codecov
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        run: |
+          if [ -z "${CODECOV_TOKEN}" ]; then
+            echo "::error::Secret CODECOV_TOKEN manquant (Codecov → dépôt → Settings → upload token ; GitHub → Settings → Secrets and variables → Actions)."
+            exit 1
+          fi
+
+      - name: Envoyer la couverture à Codecov
         uses: codecov/codecov-action@v5
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
           slug: ${{ github.repository }}
           files: target/site/jacoco/jacoco.xml
           fail_ci_if_error: true
-          use_oidc: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
 
   # ---------------------------------------------------------------------------
   # CI-4 — Image finale = 2e étape du Dockerfile ; SKIP_TESTS=true (déjà validé en CI-2).
