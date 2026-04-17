@@ -7,9 +7,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * REST API for basic arithmetic.
- */
+/** REST API for basic arithmetic (finite operands within configured bounds). */
 @RestController
 @RequestMapping("/api/calc")
 public class CalculatorController {

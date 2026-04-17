@@ -2,19 +2,22 @@ package fr.efrei.tp1devops.calculator.controller;
 
 import fr.efrei.tp1devops.calculator.exception.GlobalExceptionHandler;
 import fr.efrei.tp1devops.calculator.service.CalculatorService;
+import fr.efrei.tp1devops.calculator.validation.OperandValidator;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(controllers = CalculatorController.class)
-@Import({CalculatorService.class, GlobalExceptionHandler.class})
+@Import({CalculatorService.class, OperandValidator.class, GlobalExceptionHandler.class})
 class CalculatorControllerTest {
 
     @Autowired
@@ -69,5 +72,28 @@ class CalculatorControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.message").value(containsString("b")));
+    }
+
+    @Test
+    void nanOperand_returnsUnprocessableEntity() throws Exception {
+        mockMvc.perform(get("/api/calc/add").param("a", "NaN").param("b", "1"))
+                .andExpect(status().is(422))
+                .andExpect(jsonPath("$.status").value(422))
+                .andExpect(jsonPath("$.message").value(containsString("finite")));
+    }
+
+    @Test
+    void infiniteOperand_returnsUnprocessableEntity() throws Exception {
+        mockMvc.perform(get("/api/calc/mul").param("a", "Infinity").param("b", "2"))
+                .andExpect(status().is(422))
+                .andExpect(jsonPath("$.status").value(422));
+    }
+
+    @Test
+    void outOfBounds_returnsUnprocessableEntity() throws Exception {
+        mockMvc.perform(get("/api/calc/add").param("a", "2e13").param("b", "0"))
+                .andExpect(status().is(422))
+                .andExpect(jsonPath("$.status").value(422))
+                .andExpect(jsonPath("$.message").value(containsString("bounds")));
     }
 }
