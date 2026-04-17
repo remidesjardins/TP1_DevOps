@@ -1,0 +1,72 @@
+# Analyse qualité complète sur la branche default (main).
+#
+# Déclenché après merge (push sur main) ou à la main (workflow_dispatch).
+# SonarCloud est en analyse de *branche* (pas de mode PR) : tout le code présent sur main est scanné ;
+# les métriques « Overall » / dette totale se mettent à jour sur le tableau de bord du projet.
+#
+# Secrets / variables : identiques à ci.yml (SONAR_TOKEN, SONAR_ORGANIZATION, SONAR_PROJECT_KEY, CODECOV_TOKEN).
+
+name: Analyse complète (main)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: analyse-main-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  analyse-branche-main:
+    name: Sonar + JaCoCo (analyse branche main)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout (historique complet pour SCM Sonar)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: "temurin"
+          cache: "maven"
+
+      - name: Rendre le wrapper Maven exécutable
+        run: chmod +x mvnw
+
+      - name: Vérifier SonarCloud et Codecov
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_ORGANIZATION: ${{ vars.SONAR_ORGANIZATION }}
+          SONAR_PROJECT_KEY: ${{ vars.SONAR_PROJECT_KEY }}
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        run: |
+          test -n "${SONAR_TOKEN}" || { echo "::error::SONAR_TOKEN manquant"; exit 1; }
+          test -n "${SONAR_ORGANIZATION}" && test -n "${SONAR_PROJECT_KEY}" || { echo "::error::Variables SONAR_* manquantes"; exit 1; }
+          test -n "${CODECOV_TOKEN}" || { echo "::error::CODECOV_TOKEN manquant"; exit 1; }
+
+      - name: Tests et couverture JaCoCo (tout le code de main)
+        run: ./mvnw -B clean verify
+
+      - name: Analyse SonarCloud (branche main, périmètre complet)
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >-
+          ./mvnw -B -DskipTests sonar:sonar
+          -Dsonar.organization=${{ vars.SONAR_ORGANIZATION }}
+          -Dsonar.projectKey=${{ vars.SONAR_PROJECT_KEY }}
+          -Dsonar.branch.name=main
+
+      - name: Couverture Codecov (branche default)
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: ${{ github.repository }}
+          files: target/site/jacoco/jacoco.xml
+          fail_ci_if_error: true
